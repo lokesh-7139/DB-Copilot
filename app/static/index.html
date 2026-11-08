@@ -4,15 +4,15 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>DB Copilot · Query explorer</title>
-  <link rel="stylesheet" href="/static/style.css">
-  <script defer src="/static/app.js"></script>
+  <link rel="stylesheet" href="/static/style.css?v=table-count-2">
+  <script defer src="/static/app.js?v=table-count-2"></script>
 </head>
 <body>
   <aside class="sidebar">
     <a class="brand" href="/" aria-label="DB Copilot home"><span class="brand-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" aria-hidden="true"><ellipse cx="12" cy="5" rx="7" ry="3"/><path d="M5 5v14c0 4 14 4 14 0V5M5 12c0 4 14 4 14 0"/></svg></span> DB Copilot<span class="beta">BETA</span></a>
     <div class="nav-item"><svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.4" aria-hidden="true"><rect x="3" y="3" width="14" height="14" rx="3"/><path d="m7 7 3 3-3 3m5 0h2"/></svg> Query explorer <span class="nav-dot"></span></div>
     <div class="connection"><span class="connection-dot"></span><div><strong id="database-name">Connecting…</strong><small id="connection-detail">Loading database metadata</small></div></div>
-    <div class="schema-header"><span>Tables <span id="table-count"></span></span><button id="refresh-schema" class="subtle-button" type="button">Refresh</button></div>
+    <div class="schema-header"><span>Tables <span id="table-count" hidden></span></span><button id="refresh-schema" class="subtle-button" type="button">Refresh</button></div>
     <div id="schema" class="schema"></div>
   </aside>
   <main>
@@ -42,8 +42,8 @@
           <p id="comparison-question" class="message"></p>
           <div id="resource-table" class="table-container resource-table"></div>
           <div id="schema-comparison" class="schema-context"></div>
-          <p class="comparison-note">Time includes the entire request. LLM totals include schema selection and SQL generation; embedding tokens are shown separately. Cache hits make embedding calls unnecessary. Usage is reported by the API, not estimated; failed requests may have incomplete measurements. SDK retries are not individually counted.</p>
-          <p class="comparison-note">RAG can reduce schema sent to SQL generation while adding selection overhead. These measurements show the tradeoff for this question; they do not establish answer correctness or a general performance advantage.</p>
+          <p class="comparison-note">Time includes the entire request. Both methods use one SQL-generation LLM call. RAG embedding tokens are shown separately. Cache hits make embedding calls unnecessary. Usage is reported by the API, not estimated; failed requests may have incomplete measurements. SDK retries are not individually counted.</p>
+          <p class="comparison-note">RAG retrieves relevant tables and retains all their columns, adding embedding and retrieval overhead. These measurements show the tradeoff for this question; they do not establish answer correctness or a general performance advantage.</p>
         </section>
         <template id="answer-template">
         <div class="answer-heading"><h2>Your answer</h2><span id="timing" class="muted"></span></div>

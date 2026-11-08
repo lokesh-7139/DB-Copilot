@@ -14,7 +14,7 @@ from app.database import Database
 from app.generation import generate, generate_without_rag
 from app.validation import UnsafeSQL, validate_sql
 from app.retrieval import RetrievalUnavailable
-from app.selection import select_schema
+from app.schema_context import retrieve_context
 from app.metrics import RequestMetrics, active_metrics
 
 logger = logging.getLogger(__name__)
@@ -116,7 +116,7 @@ def create_app(settings: Settings | None = None):
     def selected_schema(request: AskRequest):
         started = perf_counter()
         try:
-            selected = select_schema(request.question.strip(), app.state.db.snapshot(), settings)
+            selected = retrieve_context(request.question.strip(), app.state.db.snapshot(), settings)
             return {'question': request.question, 'schema': selected.schema,
                     'retrieval': selected.metadata(), 'clarification': selected.clarification,
                     'elapsed_ms': round((perf_counter() - started) * 1000), 'error': None}

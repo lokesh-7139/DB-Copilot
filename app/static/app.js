@@ -62,6 +62,7 @@ function compactType(type) {
 }
 
 async function initialize(refresh = false) {
+  $('table-count').hidden = true;
   try {
     const response = await fetch(refresh ? '/api/schema/refresh' : '/api/schema', refresh ? {method: 'POST'} : {});
     if (!response.ok) throw new Error('Could not load database metadata.');
@@ -73,6 +74,7 @@ async function initialize(refresh = false) {
     $('connection-error').hidden = true;
     $('ask-button').disabled = busy;
     $('table-count').textContent = Object.keys(data.tables).length;
+    $('table-count').hidden = false;
     for (const [name, meta] of Object.entries(data.tables)) {
       const details = document.createElement('details');
       const summary = document.createElement('summary');
@@ -151,7 +153,7 @@ async function askMode(mode, question) {
       const selected = trace.selected_columns || {};
       field(mode, 'schema-summary').textContent = `View schema sent · ${trace.context_tables.length} tables · ${trace.selected_column_count ?? Object.values(selected).flat().length} columns`;
       field(mode, 'schema-reduction').textContent = trace.candidate_column_count !== undefined
-        ? (mode === 'full' ? 'Full database schema sent directly, without retrieval or schema selection.' : `Selected from ${trace.candidate_table_count} candidate tables and ${trace.candidate_column_count} columns.`) : '';
+        ? (mode === 'full' ? 'Full database schema sent directly, without retrieval or schema selection.' : 'All columns from the retrieved tables and relationship tables are sent directly to SQL generation.') : '';
       field(mode, 'selected-columns').replaceChildren();
       for (const table of trace.context_tables) {
         field(mode, 'selected-columns').append(cell('li', `${table}: ${(selected[table] || []).join(', ')}`));
@@ -205,9 +207,7 @@ function renderComparison(question) {
     ['End-to-end time', (d) => typeof d?.elapsed_ms === 'number' ? `${(d.elapsed_ms / 1000).toFixed(2)} s` : 'Unavailable'],
     ['Tables sent to SQL generation', (d) => number(stage(d, 'generation')?.schema?.table_count)],
     ['Columns sent to SQL generation', (d) => number(stage(d, 'generation')?.schema?.column_count)],
-    ['Tables sent to schema selection', (d) => d?.mode === 'full' ? 'Not used' : number(stage(d, 'selection')?.schema?.table_count)],
     ['Schema payload across LLM calls', (d) => { const bytes = sum(d, 'bytes'); return bytes === null ? 'Unavailable' : `${(bytes / 1024).toFixed(2)} KiB`; }],
-    ['Selection input tokens', (d) => d?.mode === 'full' ? 'Not used' : number(stage(d, 'selection')?.input_tokens)],
     ['SQL generation input tokens', (d) => number(stage(d, 'generation')?.input_tokens)],
     ['All LLM input tokens', (d) => number(d?.resources?.input_tokens)],
     ['All LLM output tokens', (d) => number(d?.resources?.output_tokens)],
@@ -235,7 +235,7 @@ function renderComparison(question) {
     const calls = results[mode]?.resources?.calls?.filter((call) => call.schema) || [];
     if (!calls.length) details.append(cell('p', 'No schema payload measurements available.'));
     for (const call of calls) {
-      details.append(cell('p', `${call.stage === 'selection' ? 'Schema selection' : 'SQL generation'}: ${call.schema.tables.join(', ')}`));
+      details.append(cell('p', `SQL generation: ${call.schema.tables.join(', ')}`));
     }
     $('schema-comparison').append(details);
   }

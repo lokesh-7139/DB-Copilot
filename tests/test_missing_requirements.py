@@ -2,13 +2,13 @@ from types import SimpleNamespace
 
 from app.generation import generate
 from app.retrieval import RetrievedSchema
-from app.selection import SelectedSchema
+from app.schema_context import SchemaContext
 
 
 def test_missing_requirement_discards_even_model_supplied_sql(client, database_stub, monkeypatch):
     schema = {'records': {**database_stub.schema['records'], 'columns': {'name': 'NVARCHAR(100)'}}}
-    selected = SelectedSchema(schema, RetrievedSchema(schema, 'embeddings', []))
-    monkeypatch.setattr('app.generation.select_schema', lambda *args: selected)
+    selected = SchemaContext(schema, RetrievedSchema(schema, 'embeddings', []))
+    monkeypatch.setattr('app.generation.retrieve_context', lambda *args: selected)
     class FakeClient:
         def __init__(self, **kwargs): self.responses = self
         def __enter__(self): return self

@@ -138,26 +138,22 @@ def test_schema_documents_include_relationships_and_bound_input_size():
 def test_generation_uses_retrieved_schema_and_keeps_trace_out_of_model_schema(tmp_path, monkeypatch):
     import json
     from app.generation import GeneratedQuery, generate
-    from app.selection import SelectionPlan, TableSelection
     captured = {}
     class FakeClient:
         def __init__(self, **kwargs): self.responses = self
         def __enter__(self): return self
         def __exit__(self, *args): pass
         def parse(self, **kwargs):
-            if kwargs['text_format'] is SelectionPlan:
-                return SimpleNamespace(output_parsed=SelectionPlan(
-                    tables=[TableSelection(table='products',columns=['stock'])], joins=[], clarification=None))
             captured.update(kwargs)
             return SimpleNamespace(output_parsed=kwargs['text_format'](missing_requirements=[], sql='SELECT stock FROM products', explanation='Stock.'))
     monkeypatch.setattr('app.generation.OpenAI', FakeClient)
-    monkeypatch.setattr('app.selection.OpenAI', FakeClient)
     options = settings(schema_top_k=1)
     retriever = SchemaRetriever(SCHEMA, 'tsql', 'dbo', options, embedder=vectors_for, cache_dir=tmp_path)
     generated = generate('inventory question', SimpleNamespace(dialect='tsql', retriever=retriever), options)
     sent_schema = json.loads(captured['input'])['schema']
-    assert set(sent_schema) == {'products'}
-    assert set(sent_schema['products']['columns']) == {'stock'}
+    assert set(sent_schema) == {'products', 'categories'}
+    assert sent_schema['products'] == SCHEMA['products']
+    assert sent_schema['categories'] == SCHEMA['categories']
     assert generated._schema == sent_schema
     assert generated._retrieval['mode'] == 'embeddings'
     assert set(GeneratedQuery.model_json_schema()['properties']) == {'sql', 'explanation'}

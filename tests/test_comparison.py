@@ -29,7 +29,7 @@ def test_without_rag_sends_entire_catalog_and_never_retrieves(catalog, options, 
             return SimpleNamespace(output_parsed=kwargs['text_format'](
                 missing_requirements=[], sql='SELECT name FROM sales.customers WHERE id=15', explanation='Customer.'))
     monkeypatch.setattr('app.generation.OpenAI', FakeClient)
-    monkeypatch.setattr('app.generation.select_schema', lambda *args: pytest.fail('No selection in full mode'))
+    monkeypatch.setattr('app.generation.retrieve_context', lambda *args: pytest.fail('No selection in full mode'))
     database = SimpleNamespace(schema=catalog, retriever=MagicMock())
     result = generate_without_rag('Customer 15', database, options)
     assert captured == [{'question': 'Customer 15', 'schema': catalog}]

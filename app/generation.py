@@ -5,7 +5,7 @@ from datetime import date
 from openai import OpenAI
 from pydantic import BaseModel, PrivateAttr
 
-from app.selection import select_schema, SelectedSchema
+from app.schema_context import retrieve_context, SchemaContext
 from app.retrieval import RetrievedSchema
 from app.metrics import begin_call, finish_call
 
@@ -24,25 +24,25 @@ class SQLDraft(BaseModel):
 
 
 def generate(question, database, settings):
-    selected = select_schema(question, database, settings)
-    return generate_selected(question, selected, settings)
+    context = retrieve_context(question, database, settings)
+    return generate_from_context(question, context, settings)
 
 
 def generate_without_rag(question, database, settings):
     # A separate model request, with the entire catalog and no retrieval/selection.
-    selected = SelectedSchema(database.schema, RetrievedSchema(database.schema, 'full_schema', []))
-    result = generate_selected(question, selected, settings)
+    context = SchemaContext(database.schema, RetrievedSchema(database.schema, 'full_schema', []))
+    result = generate_from_context(question, context, settings)
     result._retrieval['stage'] = 'full_schema'
     return result
 
 
-def generate_selected(question, selected, settings):
-    if selected.clarification:
-        result = GeneratedQuery(sql=None, explanation=selected.clarification)
-        result._retrieval = selected.metadata()
-        result._schema = selected.schema
+def generate_from_context(question, context, settings):
+    if context.clarification:
+        result = GeneratedQuery(sql=None, explanation=context.clarification)
+        result._retrieval = context.metadata()
+        result._schema = context.schema
         return result
-    measured_call = begin_call('generation', schema=selected.schema)
+    measured_call = begin_call('generation', schema=context.schema)
     with OpenAI(api_key=settings.api_key, timeout=30, max_retries=1) as client:
         response = client.responses.parse(
             model=settings.model,
@@ -58,7 +58,7 @@ def generate_selected(question, selected, settings):
                 'list the missing ID filter. If this list is nonempty, sql must be null. '
                 'Use an empty list only when all parts of the question are answerable. '
                 'Only listed columns are available; descriptions may mention omitted columns or tables, '
-                'which must not be used. Do not use SELECT * to bypass the selected columns. '
+                'which must not be used. Do not use SELECT * to bypass the context columns. '
                 f'Use TOP ({settings.max_rows}) for unbounded detail listings; never use LIMIT. '
                 'Use clear unique result aliases. Use table descriptions and relationships to interpret '
                 'business terms; do not invent domain rules. Avoid double counting when joining '
@@ -72,7 +72,7 @@ def generate_selected(question, selected, settings):
                 'When SQL is provided, explanation must be an empty string. '
                 'Use explanation only for a necessary clarification when sql is null.'
             ),
-            input=json.dumps({'question': question, 'schema': selected.schema}),
+            input=json.dumps({'question': question, 'schema': context.schema}),
             text_format=SQLDraft,
         )
     finish_call(measured_call, response)
@@ -82,7 +82,7 @@ def generate_selected(question, selected, settings):
     result = GeneratedQuery(sql=None if draft.missing_requirements else draft.sql,
                             explanation=draft.explanation)
     if draft.missing_requirements and not result.explanation.strip():
-        result.explanation = 'Cannot answer with the selected schema: ' + '; '.join(draft.missing_requirements)
-    result._retrieval = selected.metadata()
-    result._schema = selected.schema
+        result.explanation = 'Cannot answer with the context schema: ' + '; '.join(draft.missing_requirements)
+    result._retrieval = context.metadata()
+    result._schema = context.schema
     return result

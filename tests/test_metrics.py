@@ -4,13 +4,11 @@ from types import SimpleNamespace
 from app.metrics import RequestMetrics, active_metrics, begin_call, finish_call, cache_hit
 
 
-def test_pipeline_totals_include_selection_and_keep_embedding_usage_separate():
+def test_single_generation_call_keeps_embedding_usage_separate():
     metrics = RequestMetrics()
     token = active_metrics.set(metrics)
     try:
         schema = {'dbo.records': {'columns': {'id': 'INT', 'name': 'TEXT'}}}
-        selection = begin_call('selection', schema=schema)
-        finish_call(selection, SimpleNamespace(usage=SimpleNamespace(input_tokens=100, output_tokens=20, total_tokens=120)))
         generation = begin_call('generation', schema=schema)
         finish_call(generation, SimpleNamespace(usage={'input_tokens': 50, 'output_tokens': 10, 'total_tokens': 60}))
         embedding = begin_call('embeddings', embedding=True)
@@ -19,9 +17,9 @@ def test_pipeline_totals_include_selection_and_keep_embedding_usage_separate():
     finally:
         active_metrics.reset(token)
     summary = metrics.summary()
-    assert summary['input_tokens'] == 150 and summary['output_tokens'] == 30
-    assert summary['total_tokens'] == 180 and summary['embedding_tokens'] == 7
-    assert summary['llm_calls'] == 2 and summary['embedding_calls'] == 1
+    assert summary['input_tokens'] == 50 and summary['output_tokens'] == 10
+    assert summary['total_tokens'] == 60 and summary['embedding_tokens'] == 7
+    assert summary['llm_calls'] == 1 and summary['embedding_calls'] == 1
     assert summary['calls'][0]['schema']['table_count'] == 1
     assert summary['calls'][0]['schema']['column_count'] == 2
     assert summary['cache_hits'] == {'schema_embeddings': True}
@@ -59,15 +57,15 @@ def test_parallel_requests_do_not_share_usage():
 
 def test_api_preserves_partial_metrics_on_failure(client, monkeypatch):
     def fail(*args):
-        call = begin_call('selection')
-        finish_call(call, SimpleNamespace(usage={'input_tokens': 10, 'output_tokens': 2, 'total_tokens': 12}))
+        call = begin_call('embeddings', embedding=True)
+        finish_call(call, SimpleNamespace(usage={'prompt_tokens': 12, 'total_tokens': 12}))
         begin_call('generation')
         raise RuntimeError('Provider failed')
     monkeypatch.setattr('app.main.generate', fail)
     response = client.post('/api/ask', json={'question': 'Show records'})
     assert response.status_code == 502
     metrics = response.json()['resources']
-    assert metrics['llm_calls'] == 2 and metrics['total_tokens'] is None
+    assert metrics['llm_calls'] == 1 and metrics['total_tokens'] is None
     assert metrics['calls'][0]['total_tokens'] == 12
     assert active_metrics.get() is None
 
