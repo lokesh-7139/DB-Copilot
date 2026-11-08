@@ -24,7 +24,7 @@ class SQLDraft(BaseModel):
 
 
 def generate(question, database, settings):
-    context = retrieve_context(question, database, settings)
+    context = retrieve_context(question, database)
     return generate_from_context(question, context, settings)
 
 

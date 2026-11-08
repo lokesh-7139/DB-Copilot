@@ -6,7 +6,6 @@ import pytest
 from app.generation import generate
 from app.metrics import RequestMetrics, active_metrics
 from app.retrieval import RetrievedSchema
-from app.schema_context import retrieve_context
 from app.validation import UnsafeSQL, validate_sql
 
 

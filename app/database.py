@@ -17,7 +17,6 @@ class Database:
 
     def __init__(self, settings: Settings):
         self.settings = settings
-        self.schema_name = settings.db_schema
         # Every physical connection enters the restricted context independently.
         pyodbc.pooling = False
         self.engine = create_engine(settings.database_url, poolclass=NullPool,

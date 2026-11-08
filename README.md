@@ -26,7 +26,7 @@ Open http://127.0.0.1:8000. One process serves the website and API. The configur
 
 The application discovers every visible user table across all user schemas in the connected database. System schemas are excluded. Tables are identified by qualified names such as `dbo.customers` and `sales.customers`; cross-schema foreign keys retain the correct target. Unqualified table names are accepted only when they resolve uniquely and are executed with an explicit schema. Discovery is limited by the database reader's permissions; explicit SELECT denials still apply.
 
-`DB_SCHEMA` and `ALLOWED_TABLES` are no longer used. Old values in an existing `.env` are ignored. Database-wide reader grants cover new user schemas and tables unless SQL Server permissions explicitly restrict them.
+Database-wide reader grants cover new user schemas and tables unless SQL Server permissions explicitly restrict them.
 
 Schema is checked when serving schema/question requests, with a five-second metadata cache. The **Refresh** button forces an immediate refresh without restarting the backend. Changed tables, columns and relationships replace the catalog and retriever together; in-flight requests keep their own consistent snapshot. Cached embeddings are reused when the catalog is unchanged, and rebuilt lazily when its fingerprint changes. Merely changing data does not require refreshing schema.
 

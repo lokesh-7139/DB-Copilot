@@ -15,13 +15,12 @@ class SchemaContext:
         count = sum(map(len, columns.values()))
         return {**self.retrieved.metadata(),
                 'stage': 'full_schema' if self.retrieved.mode == 'full_schema' else 'retrieved',
-                'candidate_tables': list(self.schema), 'context_tables': list(self.schema),
+                'context_tables': list(self.schema),
                 'selected_columns': columns,
-                'candidate_table_count': len(self.schema), 'candidate_column_count': count,
-                'selected_table_count': len(self.schema), 'selected_column_count': count}
+                'selected_column_count': count}
 
 
-def retrieve_context(question, database, settings=None):
+def retrieve_context(question, database):
     retrieved = database.retriever.retrieve(question)
     if not retrieved.schema:
         return SchemaContext({}, retrieved, 'No accessible tables were found. Check the database and reader permissions.')

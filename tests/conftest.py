@@ -12,7 +12,7 @@ from app.main import create_app
 @pytest.fixture
 def options():
     return Settings(database_url='mssql+pyodbc://test/TestDatabase', api_key='test', model='test',
-                    db_schema='dbo', allowed_tables=())
+                    db_schema='dbo')
 
 
 @pytest.fixture

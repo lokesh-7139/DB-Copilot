@@ -25,7 +25,7 @@ SCHEMA = {
 
 def settings(**overrides):
     return Settings(database_url='mssql+pyodbc://test/TestDatabase', api_key='test', model='test',
-                    allowed_tables=(), db_schema='dbo', **overrides)
+                    db_schema='dbo', **overrides)
 
 
 def vectors_for(texts):

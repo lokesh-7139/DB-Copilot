@@ -71,7 +71,6 @@ def test_api_preserves_partial_metrics_on_failure(client, monkeypatch):
 
 
 def test_generation_records_api_usage_and_schema(client, database_stub, options, monkeypatch):
-    from app.generation import generate_without_rag
     class FakeClient:
         def __init__(self, **kwargs): self.responses = self
         def __enter__(self): return self

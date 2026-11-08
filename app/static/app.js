@@ -152,8 +152,9 @@ async function askMode(mode, question) {
       const trace = data.retrieval;
       const selected = trace.selected_columns || {};
       field(mode, 'schema-summary').textContent = `View schema sent · ${trace.context_tables.length} tables · ${trace.selected_column_count ?? Object.values(selected).flat().length} columns`;
-      field(mode, 'schema-reduction').textContent = trace.candidate_column_count !== undefined
-        ? (mode === 'full' ? 'Full database schema sent directly, without retrieval or schema selection.' : 'All columns from the retrieved tables and relationship tables are sent directly to SQL generation.') : '';
+      field(mode, 'schema-reduction').textContent = mode === 'full'
+        ? 'Full database schema sent directly, without retrieval or schema selection.'
+        : 'All columns from the retrieved tables and relationship tables are sent directly to SQL generation.';
       field(mode, 'selected-columns').replaceChildren();
       for (const table of trace.context_tables) {
         field(mode, 'selected-columns').append(cell('li', `${table}: ${(selected[table] || []).join(', ')}`));

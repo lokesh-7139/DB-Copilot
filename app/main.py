@@ -116,7 +116,7 @@ def create_app(settings: Settings | None = None):
     def selected_schema(request: AskRequest):
         started = perf_counter()
         try:
-            selected = retrieve_context(request.question.strip(), app.state.db.snapshot(), settings)
+            selected = retrieve_context(request.question.strip(), app.state.db.snapshot())
             return {'question': request.question, 'schema': selected.schema,
                     'retrieval': selected.metadata(), 'clarification': selected.clarification,
                     'elapsed_ms': round((perf_counter() - started) * 1000), 'error': None}
