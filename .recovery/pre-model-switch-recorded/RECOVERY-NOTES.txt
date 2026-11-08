@@ -1,2 +1,0 @@
-Recovered backend, tests and dependency declarations by replaying recorded apply_patch edits before the user question at 2026-11-08 04:41:06 UTC. No recorded shell commands were executed. This is not a full filesystem snapshot. UI, secrets, database and virtual environment are excluded. Active project files were not overwritten. Review before restoring.
-For testing, app/static was copied from the current project, not reconstructed. The recovered backend remains from recorded patches.

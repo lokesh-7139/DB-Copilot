@@ -14,6 +14,7 @@ from threading import Lock
 from openai import OpenAI, PermissionDeniedError, AuthenticationError
 
 from app.config import ROOT
+from app.metrics import begin_call, finish_call, cache_hit
 
 logger = logging.getLogger(__name__)
 INDEX_VERSION = 1
@@ -35,7 +36,7 @@ def _unit(vector):
 
 def table_document(name, metadata, dialect, schema_name):
     # Embedding input is schema metadata only. Generation still receives the full metadata.
-    document = json.dumps({'table': f'{schema_name or "main"}.{name}', 'dialect': dialect,
+    document = json.dumps({'table': name if '.' in name else f'{schema_name or "main"}.{name}', 'dialect': dialect,
                            **metadata}, sort_keys=True, ensure_ascii=False)
     # <=6000 bytes also bounds tokens below the per-input embedding token limit.
     return document.encode('utf-8')[:6000].decode('utf-8', errors='ignore')
@@ -111,10 +112,12 @@ class SchemaRetriever:
                 'top_k': self.settings.schema_top_k}
 
     def _openai_embed(self, texts):
+        measured_call = begin_call('embeddings', embedding=True)
         try:
             with OpenAI(api_key=self.settings.api_key, timeout=30, max_retries=1) as client:
                 result = client.embeddings.create(model=self.settings.embedding_model,
                                                    input=texts, encoding_format='float')
+            finish_call(measured_call, result)
             ordered = sorted(result.data, key=lambda entry: entry.index)
             if [entry.index for entry in ordered] != list(range(len(texts))):
                 raise ValueError('Embedding response is incomplete.')
@@ -132,6 +135,7 @@ class SchemaRetriever:
 
     def _load_or_build(self):
         if self.vectors is not None:
+            cache_hit('schema_embeddings')
             return
         try:
             cached = json.loads(self.cache_file.read_text(encoding='utf-8'))
@@ -142,6 +146,7 @@ class SchemaRetriever:
             if len({len(vector) for vector in vectors}) > 1:
                 raise ValueError('Inconsistent dimensions.')
             self.vectors = vectors
+            cache_hit('schema_embeddings')
             return
         except (OSError, ValueError, TypeError, KeyError):
             pass
@@ -182,6 +187,7 @@ class SchemaRetriever:
         with self.lock:
             self._load_or_build()
             if question in self.question_cache:
+                cache_hit('question_embedding')
                 vector = self.question_cache.pop(question)
             else:
                 embeddings = self.embedder([question])

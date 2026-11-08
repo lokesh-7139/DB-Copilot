@@ -44,3 +44,19 @@ main{margin-left:280px;flex:1;min-width:0}header{height:78px;border-bottom:1px s
 .schema-context{margin:16px 0;border:1px solid var(--border);border-radius:8px;padding:12px 16px;background:#f4f7ef;font-size:11px;color:#536c4b}.schema-context summary{cursor:pointer;font-weight:600}.schema-context ul{padding-left:16px;font-family:Consolas,monospace;line-height:1.9;overflow-wrap:anywhere}.schema-context .mode-note{margin:12px 0}
 
 .privacy-notice{max-width:480px;margin:0 auto;font-size:11px;line-height:1.7}.privacy-notice summary{display:inline-block;cursor:pointer;list-style:none;color:#88947f;text-decoration:underline;text-underline-offset:3px}.privacy-notice summary::-webkit-details-marker{display:none}.privacy-notice p{margin:12px 0 0;color:#7d8974}
+
+.comparison-tabs{display:inline-flex;padding:4px;background:#e9ede7;border:1px solid #dce3d9;border-radius:15px;margin-top:30px;gap:3px;max-width:100%}
+.comparison-tabs button{border:1px solid transparent;border-radius:11px;background:transparent;color:#72816c;padding:12px 20px;font-size:13px;font-weight:600;transition:background .15s,color .15s}
+.comparison-tabs button[aria-selected="true"]{background:#fff;border-color:#d4ddce;color:#244d38;box-shadow:0 1px 4px #29432d12}
+.comparison-tabs button span{display:block;font-size:9px;font-weight:400;margin-top:3px;min-height:12px}
+.comparison-note{font-size:11px;color:#7c8881;line-height:1.6;margin:10px 0 0}
+@media(max-width:650px){.comparison-tabs{display:flex}.comparison-tabs button{flex:1;padding:12px}}
+
+.comparison-tabs{display:flex;width:100%;align-items:center;justify-content:space-between;padding:0;border:0;background:transparent;gap:12px}
+.method-tabs{display:inline-flex;padding:4px;background:#e9ede7;border:1px solid #dce3d9;border-radius:15px;gap:3px}
+#compare-tab{margin-left:auto;background:#edf2e9;border-color:#d4ddce;color:#47623e;min-height:50px}
+#compare-tab[aria-selected="true"]{background:#fff;color:#244d38}
+.resource-table{border:1px solid var(--border);border-radius:9px;background:white;max-height:none;margin:18px 0}
+.resource-table tbody th{position:static;text-transform:none;letter-spacing:0;font-size:11px;background:#f7f9f3;width:48%;white-space:normal}
+#schema-comparison details{margin:8px 0}#schema-comparison summary{cursor:pointer;font-weight:600}#schema-comparison p{overflow-wrap:anywhere;line-height:1.8}
+@media(max-width:650px){.comparison-tabs{flex-wrap:wrap}.method-tabs{flex:1}.comparison-tabs button{font-size:11px;padding:10px 12px}#compare-tab{flex:0 0 auto;min-height:50px}.resource-table th,.resource-table td{padding:10px}}

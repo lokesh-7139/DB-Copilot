@@ -46,19 +46,40 @@ def validate_sql(sql: str, schema: dict, dialect: str = 'tsql', db_schema: str =
         if isinstance(node, exp.Dot):
             raise UnsafeSQL('Qualified function calls are not allowed.')
     ctes = {cte.alias_or_name for cte in tree.find_all(exp.CTE)}
+    resolved = []
     for table in tree.find_all(exp.Table):
         if not isinstance(table.this, exp.Identifier):
             raise UnsafeSQL('Table functions are not allowed.')
-        if table.catalog or (table.db and table.db != db_schema):
-            raise UnsafeSQL('Queries may only access the configured schema.')
-        if table.name not in schema and (table.name not in ctes or table.db):
+        if table.catalog:
+            raise UnsafeSQL('Queries may only access the connected database.')
+        if not table.db and table.name in ctes:
+            resolved.append(None)
+            continue
+        exact = f'{table.db}.{table.name}' if table.db else table.name
+        key = exact if exact in schema else None
+        if key is None and table.db == db_schema and table.name in schema:
+            key = table.name  # Compatibility for unqualified schema fixtures.
+        if key is None and not table.db:
+            matches = [name for name, meta in schema.items()
+                       if meta.get('table', name.rsplit('.', 1)[-1]) == table.name]
+            if len(matches) > 1:
+                raise UnsafeSQL(f'Table {table.name} is ambiguous; specify its schema.')
+            if len(matches) == 1:
+                key = matches[0]
+        if key is None:
             raise UnsafeSQL(f'Table {table.name} is not available.')
+        resolved.append(key)
+        if schema[key].get('schema'):
+            # Execute with explicit schema even when the model omitted it.
+            table.set('db', exp.to_identifier(schema[key]['schema']))
     # Resolve CTE scopes, aliases and columns, rejecting unknown/ambiguous columns.
     type_schema = {name: value['columns'] for name, value in schema.items()}
     resolution_tree = tree.copy()
-    if any(table.db for table in resolution_tree.find_all(exp.Table)):
-        # Normalize validated schema qualifiers for consistent column resolution.
-        for table in resolution_tree.find_all(exp.Table):
+    for table, key in zip(resolution_tree.find_all(exp.Table), resolved):
+        if key is not None:
+            if not table.alias:
+                table.set('alias', exp.TableAlias(this=exp.to_identifier(table.name)))
+            table.set('this', exp.to_identifier(key, quoted=True))
             table.set('db', None)
     try:
         qualify(resolution_tree, dialect=dialect, schema=type_schema,

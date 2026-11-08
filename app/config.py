@@ -16,10 +16,8 @@ class Settings:
 
     api_key: str = os.getenv('OPENAI_API_KEY', '')
     model: str = os.getenv('OPENAI_MODEL', '')
-    db_schema: str = os.getenv('DB_SCHEMA', 'dbo')
-    allowed_tables: tuple[str, ...] = tuple(
-        t.strip() for t in os.getenv('ALLOWED_TABLES', '').split(',') if t.strip()
-    )
+    db_schema: str = 'dbo'  # Legacy default for unqualified SQL fixtures; discovery scans all user schemas.
+    allowed_tables: tuple[str, ...] = ()  # Kept for backwards-compatible Settings construction.
     max_rows: int = int(os.getenv('MAX_ROWS', '200'))
     timeout_ms: int = int(os.getenv('QUERY_TIMEOUT_MS', '5000'))
     mssql_readonly_user: str = os.getenv('MSSQL_READONLY_USER', 'copilot_reader')

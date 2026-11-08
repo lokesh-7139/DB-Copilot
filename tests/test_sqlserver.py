@@ -33,7 +33,8 @@ def table_target(database):
         pytest.skip('No visible tables are configured.')
     name = sorted(database.schema)[0]
     quote = database.engine.dialect.identifier_preparer.quote_identifier
-    return f'{quote(database.schema_name)}.{quote(name)}', name
+    meta = database.schema[name]
+    return f"{quote(meta['schema'])}.{quote(meta['table'])}", name
 
 
 def test_reflection_and_select(sqlserver):

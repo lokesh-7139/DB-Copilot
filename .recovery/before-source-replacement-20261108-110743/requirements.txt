@@ -1,7 +1,0 @@
-fastapi>=0.115,<1
-uvicorn>=0.34,<1
-SQLAlchemy>=2.0,<3
-sqlglot>=26,<31
-openai>=2,<4
-python-dotenv>=1,<2
-pyodbc>=5,<6

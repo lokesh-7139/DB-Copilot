@@ -27,6 +27,7 @@ def database_stub():
     }
     database.engine.url = SimpleNamespace(database='TestDatabase')
     database.retriever.status.return_value = {'mode': 'embeddings', 'indexed_tables': 0, 'top_k': 3}
+    database.snapshot.return_value = database
     database.execute.return_value = (['id', 'name'], [[1, 'First'], [2, 'Second']], False)
     return database
 

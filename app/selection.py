@@ -7,6 +7,7 @@ from openai import OpenAI
 from pydantic import BaseModel, Field
 
 from app.retrieval import RetrievalUnavailable, RetrievedSchema
+from app.metrics import begin_call, finish_call
 
 
 class TableSelection(BaseModel):
@@ -104,6 +105,7 @@ def apply_selection(candidates: RetrievedSchema, plan: SelectionPlan) -> Selecte
         meta = source[name]
         primary_key = meta.get('primary_key', [])
         reduced[name] = {
+            **{key: meta[key] for key in ('schema', 'table') if key in meta},
             'columns': {column: type_ for column, type_ in meta['columns'].items() if column in selected},
             'primary_key': primary_key if set(primary_key) <= selected else [],
             'foreign_keys': joins.get(name, []),
@@ -116,6 +118,7 @@ def select_schema(question, database, settings):
     candidates = database.retriever.retrieve(question)
     if not candidates.schema:
         return SelectedSchema({}, candidates, 'No accessible schema was found. Check the database and table allowlist.')
+    measured_call = begin_call('selection', schema=candidates.schema)
     with OpenAI(api_key=settings.api_key, timeout=30, max_retries=1) as client:
         response = client.responses.parse(
             model=settings.model,
@@ -149,6 +152,7 @@ def select_schema(question, database, settings):
             input=json.dumps({'question': question, 'candidate_schema': candidates.schema}),
             text_format=SelectionPlan,
         )
+    finish_call(measured_call, response)
     if response.output_parsed is None:
         raise InvalidSelection('The model did not return a verifiable schema selection. Try rephrasing your question.')
     return apply_selection(candidates, response.output_parsed)

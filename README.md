@@ -1,69 +1,79 @@
 # DB Copilot
 
-Ask questions about a connected SQL Server database and receive the generated T-SQL plus its actual results.
+Ask a question about SQL Server and compare two independently generated answers.
 
-`Question â†’ schema RAG candidates â†’ essential-schema selection â†’ SQL generation â†’ validation â†’ SQL + results`
+- **With RAG:** semantic schema retrieval, relationship expansion and focused table/column selection, followed by SQL generation.
+- **Without RAG:** the complete accessible catalog and the question go directly to a separate SQL-generation request. No retrieval or selection is performed.
 
-## Run locally
+The browser sends two independent POST requests per question. Each answer tab keeps its own SQL, results, schema context, timing, loading state and error. Routine success explanations are hidden; clarification questions remain visible. Failure in one branch does not prevent the other from completing. Results are not passed between branches or sent to OpenAI. Matching answers do not establish correctness.
 
-Requires Python 3.12+, SQL Server, and Microsoft ODBC Driver 18. Copy `.env.example` to `.env` only when configuring a new checkout; keep an existing `.env`. Set your API key, model, connection URL, schema and restricted database user.
+## Local setup
+
+Requires Python 3.12+, SQL Server, and Microsoft ODBC Driver 18.
+
+1. Create a virtual environment and install `requirements.txt`.
+2. For a new checkout, copy `.env.example` to `.env` and configure your API key, model and SQL Server connection. Preserve an existing `.env`.
+3. As a database administrator, run `scripts/grant_read_access.sql` in the target database. The script creates or updates `copilot_reader`, grants database-wide SELECT and VIEW DEFINITION, and denies INSERT, UPDATE, DELETE and EXECUTE. If using a different `MSSQL_READONLY_USER`, adjust the script's user name.
+4. Start the backend:
 
 ```powershell
-python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r requirements.txt
 .\.venv\Scripts\python.exe -m uvicorn app.main:create_app --factory --host 127.0.0.1 --port 8000
 ```
 
-Open http://127.0.0.1:8000. API documentation: http://127.0.0.1:8000/docs.
+Open http://127.0.0.1:8000. One process serves the website and API. The configured Windows identity must have permission to impersonate the restricted reader. Local `lpc:.\SQLEXPRESS` uses shared memory; the example trusts the local development certificate.
 
-The existing local connection uses `lpc:.\SQLEXPRESS`, database `DBCopilot`, Windows Authentication, and schema `dbo`. SQL Server must be running. `lpc:` uses local shared memory. `TrustServerCertificate=yes` is for this local instance's self-signed development certificate; configure a trusted certificate for a remote connection.
+## Schema discovery and refresh
 
-The app connects to an existing database. It creates no tables or records and has no built-in demo queries or domain-specific business rules. Add business definitions to SQL Server table descriptions (`MS_Description`), which are retrieved with the schema.
+The application discovers every visible user table across all user schemas in the connected database. System schemas are excluded. Tables are identified by qualified names such as `dbo.customers` and `sales.customers`; cross-schema foreign keys retain the correct target. Unqualified table names are accepted only when they resolve uniquely and are executed with an explicit schema. Discovery is limited by the database reader's permissions; explicit SELECT denials still apply.
 
-## Query permissions
+`DB_SCHEMA` and `ALLOWED_TABLES` are no longer used. Old values in an existing `.env` are ignored. Database-wide reader grants cover new user schemas and tables unless SQL Server permissions explicitly restrict them.
 
-`MSSQL_READONLY_USER` must identify an existing restricted database user. Each physical connection switches to that user using `EXECUTE AS USER ... WITH NO REVERT` before schema inspection or generated queries. The connecting Windows identity needs permission to impersonate that user. The existing local setup uses `copilot_reader`, which already has SELECT permissions on the approved tables and explicit write/EXECUTE denials. Changing databases requires provisioning an equivalent restricted user separately.
+Schema is checked when serving schema/question requests, with a five-second metadata cache. The **Refresh** button forces an immediate refresh without restarting the backend. Changed tables, columns and relationships replace the catalog and retriever together; in-flight requests keep their own consistent snapshot. Cached embeddings are reused when the catalog is unchanged, and rebuilt lazily when its fingerprint changes. Merely changing data does not require refreshing schema.
 
-Driver pooling is disabled and SQLAlchemy uses fresh connections. Startup checks reject a user with table write permissions or database CONTROL/CREATE TABLE permissions. The local Windows identity remains privileged, so a deployed app should use a dedicated Windows identity with narrowly scoped access. The SQL parser separately rejects writes, multiple statements, system/cross-database tables, table functions, locking hints and unapproved functions. SQL Server permissions can still expose some public system metadata.
+## Execution and configuration
 
-`ALLOWED_TABLES` optionally restricts tables exposed to RAG. Query timeout is rounded up to whole seconds by pyodbc; lock timeout and result row limits also apply.
+Both branches use the same model, generation instructions, missing-requirements check, SQL validation, restricted database identity, timeout and row limit. The RAG branch retains the existing selection pipeline and allows relevant supporting columns needed for filters, grouping, ordering and joins. Missing requirements produce a clarification instead of a guessed query.
 
-## Schema RAG
+Every connection uses `EXECUTE AS USER ... WITH NO REVERT`; pooling is disabled. Metadata and permission checks have a 30-second statement budget. Generated queries use `QUERY_TIMEOUT_MS` rounded up to whole seconds by the driver, plus the configured lock timeout. At most `MAX_ROWS` rows are returned. Only a single validated read-only SELECT is executed. SQL validation rejects writes, SELECT INTO, multiple statements, table functions, unapproved functions, locking hints, unavailable tables/columns and cross-database access. This app runs locally without multi-user authentication; bind it to loopback.
 
-The app extracts tables, columns, descriptions, primary keys and foreign keys. It embeds schema documents with `EMBEDDING_MODEL`, ranks tables by cosine similarity, retrieves `SCHEMA_TOP_K` candidates, connects them through foreign-key paths, and recursively includes parent tables. A separate structured model call then selects the tables and columns needed for output, filtering, grouping, ordering and aggregation. The API key needs Write access to `/v1/embeddings` and `/v1/responses`.
+- `DATABASE_URL`, `MSSQL_READONLY_USER`: database connection and restricted reader.
+- `OPENAI_API_KEY`, `OPENAI_MODEL`: provider credentials/model, used independently by both branches.
+- `EMBEDDING_MODEL`, `SCHEMA_TOP_K`: RAG embedding model and initial match count, not a final table-count limit.
+- `MAX_ROWS`, `QUERY_TIMEOUT_MS`: execution limits shared by both branches.
 
-The selector lists only necessary foreign-key edges. The application verifies each selected identifier and relationship against the candidates, then adds both sides of those join keys (including composite keys and intermediate tables). It does not expand every parent again after selection. Independent aggregates can keep separate tables without unnecessary joins. Invalid selections fail without restoring the broad schema; ambiguous or unsupported requests ask for clarification and skip SQL generation.
-
-Only the selected structural schema goes to SQL generation. SQL is validated against the selected columns as well as the database allowlist. Wildcard projections such as `SELECT *` and `alias.*` are rejected to prevent restoring omitted physical columns; `COUNT(*)` is allowed. Descriptions remain available for business meaning and may mention omitted entities, but SQL cannot reference their omitted columns or tables. The UI shows the final selected columns and the candidate-to-selected counts. The selection stage adds one model call per question before SQL generation.
-
-Vectors are cached atomically in ignored `data/schema-index/`. A fingerprint of schema metadata, embedding model, dialect and namespace invalidates stale caches after restart. This is an exact-search local vector index. Documents are capped at 6,000 UTF-8 bytes per table for embedding; selection receives complete candidate metadata. Up to 128 question vectors are cached in memory per process. Retrieval does not persist question text. Schema metadata and questions are sent to OpenAI; database rows are not.
-
-The index builds lazily on the first question. Provider failures produce an error without executing SQL. Restart to re-extract a changed schema. Selection aims for the smallest sufficient context, but it is model-based and does not mathematically guarantee a minimal or complete schema for every question. Candidate recall still limits what selection can find. Similarity scores are rankings, not correctness probabilities. Evaluate coverage, precision and SQL-result correctness separately; fewer columns alone is not proof of accuracy.
+RAG vectors are stored in ignored `data/schema-index/`. Question embeddings are cached in memory only. Table embedding documents are capped at 6,000 UTF-8 bytes; the without-RAG branch sends complete metadata without truncating it. Large full catalogs can exceed the model's context limit; that branch then reports an error rather than silently switching to RAG. Comparing both modes makes additional paid API requests.
 
 ## API
 
-- `GET /api/schema`: database name, extracted metadata, row limit and retrieval status.
-- `POST /api/ask`: accepts `{"question":"your question"}` and returns `sql`, `columns`, `rows`, `row_count`, `truncated`, `explanation`, `error`, `elapsed_ms` and `retrieval`.
-- `POST /api/schema/select`: accepts the same question and returns only the selected `schema`, `retrieval` trace and optional `clarification`. It generates no SQL and executes no data query; it does make embedding/selection calls when needed.
+- `GET /api/schema`: database name, current qualified catalog, retrieval status and row limit.
+- `POST /api/schema/refresh`: force refresh and return the updated catalog.
+- `POST /api/ask`: JSON `{"question":"your question","mode":"rag"}` or `"mode":"full"`. Mode defaults to `rag` for existing clients. Each request independently generates, validates and executes its own SQL.
+- `POST /api/schema/select`: inspect RAG selection without generating SQL or executing data queries.
 
-The retrieval trace distinguishes `candidate_tables` from final `context_tables`, lists `selected_columns`, and reports candidate/selected table and column counts. Candidate matches retain their similarity scores; excluded matches are not part of the SQL-generation schema.
+Answers contain `mode`, `sql`, `columns`, `rows`, `row_count`, `truncated`, `explanation`, `error`, `elapsed_ms` and `retrieval`. Generated SQL is the statement actually submitted for execution. Validation failures return HTTP 422; provider/execution failures return HTTP 502. Credentials and driver/provider details are not returned to the browser. Schema metadata and questions are sent to OpenAI; result rows remain local.
 
-`sql` is the exact normalized statement submitted for execution. Rows are arrays aligned to `columns`. At most `MAX_ROWS` rows are returned, with truncation detected using one additional fetched row. A clarification has `sql: null`. Validation failures return HTTP 422; provider/execution failures return HTTP 502. Generated SQL remains visible when available. Driver/provider details are redacted from user-facing errors.
-
-## Tests
+## Verification
 
 ```powershell
 .\.venv\Scripts\python.exe -m pip install -r requirements-dev.txt
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-Offline tests use isolated schema fixtures and mocked services. They cover retrieval, cache invalidation, precise table/column selection, composite join keys, independent aggregates, wildcard rejection, clarification, T-SQL validation and API responses without creating a demo database or making paid requests.
+Offline tests make no paid requests and cover retrieval, selection, generation, independent comparison branches, refresh, qualified identifiers and SQL validation.
 
-Opt-in SQL Server integration tests use the configured existing database and make no OpenAI requests:
+To include read-only SQL Server integration checks against the configured database:
 
 ```powershell
 $env:RUN_SQLSERVER_TESTS='1'
 .\.venv\Scripts\python.exe -m pytest -q
 ```
 
-These checks cover reflection, SELECT execution, restricted identity, zero-row write rejection, API results, result limits and timeouts. They do not depend on commerce tables or fixed record counts. This local prototype has no authentication or multi-user isolation; run on loopback. Conversation memory and query repair are not implemented.
+These check discovery, actual results, restricted identity, write denial, result caps and timeouts. They do not seed or delete business data. Conversation memory and general SQL repair are not implemented.
+
+## Resource comparison
+
+After both independent requests finish, a right-aligned **Comparison** tab appears. It is hidden before the first response pair completes and resets for every new question. It compares end-to-end time, schemas/tables/columns sent to each model stage, schema payload size, model input/output/total tokens, embedding tokens, call counts and embedding-cache hits. Expand the schema lists to inspect the actual table names supplied to each stage.
+
+The `resources` field in each answer contains request-local `calls`, `cache_hits`, `llm_calls`, `embedding_calls`, `input_tokens`, `output_tokens`, `total_tokens` and `embedding_tokens`. RAG's LLM totals include both schema selection and SQL generation; embedding usage is separate. A warm question/schema embedding cache makes no embedding API call and adds zero new embedding tokens. Missing API usage stays null (displayed as Unavailable), while failed calls can leave partial measurements. Call counts refer to application SDK calls and do not itemize SDK retries. Counts are not a billing statement.
+
+Schema payload size measures the serialized schema metadata sent across LLM calls, including repeated metadata, and excludes questions, instructions and embedding inputs. Time includes schema refresh, retrieval, generation, validation and execution. Output tokens include API-reported reasoning/non-visible tokens. These metrics show the per-question tradeoff rather than claiming RAG is always faster or cheaper. See the [OpenAI token usage guide](https://developers.openai.com/api/docs/guides/token-counting).
